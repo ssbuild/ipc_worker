@@ -1,3 +1,5 @@
 /build
 /.idea
 /src/__pycache__
+/ipc_worker.egg-info
+/dist

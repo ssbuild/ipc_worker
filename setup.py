@@ -8,9 +8,7 @@ import shutil
 from setuptools import Extension,find_packages
 
 package_list = find_packages('src')
-
-packge_list = find_packages('src')
-package_dir= {'ipc_worker.' + k : 'src/' + k.replace('.','/') for k in packge_list }
+package_dir= {'ipc_worker.' + k : 'src/' + k.replace('.','/') for k in package_list }
 package_dir.update({'ipc_worker': 'src'})
 
 
@@ -40,11 +38,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 platforms_name = sys.platform + '_' + platform.machine()
 
 
-
-
 if __name__ == '__main__':
-
-
     setuptools.setup(
         platforms=platforms_name,
         name="ipc-worker",
@@ -54,14 +48,13 @@ if __name__ == '__main__':
         description=title,
         long_description_content_type='text/markdown',
         long_description= title + '\n\n' + get_desc(),
-        url="https://github.com/ssbuild",
+        url="https://github.com/ssbuild/ipc_worker",
         #packages=setuptools.find_packages(exclude=['setup.py']),
         packages=list(package_dir.keys()),   # 指定需要安装的模块
         include_package_data=True,
         package_dir=package_dir,
         package_data={'': ['*.pyd','*.so','*.dat','*.h','*.c','*.java','.__data__.pys','.__meta__.pys']},
-        #ext_modules=[PrecompiledExtesion('ipc_worker')],
-        install_requires=[], # 指定项目最低限度需要运行的依赖项
+        install_requires=[],
         python_requires='>=3, <4', # python的依赖关系
         #install_requires=['numpy>=1.18.0'],
         classifiers=[
