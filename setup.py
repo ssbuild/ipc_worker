@@ -54,7 +54,7 @@ if __name__ == '__main__':
         include_package_data=True,
         package_dir=package_dir,
         package_data={'': ['*.pyd','*.so','*.dat','*.h','*.c','*.java','.__data__.pys','.__meta__.pys']},
-        install_requires=[],
+        install_requires=["termcolor"],
         python_requires='>=3, <4', # python的依赖关系
         #install_requires=['numpy>=1.18.0'],
         classifiers=[
