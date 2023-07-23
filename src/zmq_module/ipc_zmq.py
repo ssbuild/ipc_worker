@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 # @Time    : 2021/11/29 13:45
 # @Author  : tk
-
-#coding: utf-8
 import multiprocessing
 import random
 import time
@@ -39,6 +37,7 @@ class IPC_zmq:
                  evt_quit=multiprocessing.Manager().Event(),
                  queue_size=20,
                  is_log_time=False,
+                 daemon=False
                  ):
         self.__manager_lst = []
         self.__woker_lst = []
@@ -58,11 +57,12 @@ class IPC_zmq:
             identity = bytes('{}_{}'.format(group_name,i),encoding='utf-8')
             worker = CLS_worker(
                 *worker_args,
-                identity,
-                group_name,
-                evt_quit,
-                is_log_time,
-                i,
+                identity=identity,
+                group_name=group_name,
+                evt_quit=evt_quit,
+                is_log_time=is_log_time,
+                idx=i,
+                daemon=daemon
             )
             self.__group_idenity.append(identity)
             self.__woker_lst.append(worker)

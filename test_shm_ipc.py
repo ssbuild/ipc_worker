@@ -71,6 +71,7 @@ if __name__ == '__main__':
         shm_size=1 * 1024 * 1024,  # share memory size
         queue_size=20,  # recv queue size
         is_log_time=True,  # whether log compute time
+        daemon=False,
     )
 
     instance.start()

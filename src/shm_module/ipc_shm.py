@@ -35,7 +35,8 @@ class IPC_shm:
                  evt_quit=multiprocessing.Manager().Event(),
                  shm_size=1 * 1024 * 1024,
                  queue_size=20,
-                 is_log_time=False
+                 is_log_time=False,
+                 daemon=False
                  ):
         self.__manager_lst = []
         self.__woker_lst = []
@@ -68,7 +69,8 @@ class IPC_shm:
                 shm_size,
                 is_log_time=is_log_time,
                 idx=i,
-                group_name=group_name)
+                group_name=group_name,
+                daemon=daemon)
             self.__signal_list.append(worker.get_signal())
             self.__shm_name_list.append(shm_name)
             self.__woker_lst.append(worker)

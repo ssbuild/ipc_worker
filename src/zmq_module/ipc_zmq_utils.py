@@ -21,12 +21,12 @@ from .ipc_utils_func import auto_bind
 
 
 class ZMQ_worker(Process):
-    def __init__(self,identity,group_name,evt_quit,is_log_time,idx):
-        super(ZMQ_worker,self).__init__(daemon=True)
+    def __init__(self,identity,group_name,evt_quit,is_log_time,idx,daemon=False):
+        super(ZMQ_worker,self).__init__(daemon=daemon)
 
         self._logger = set_logger(colored('VENTILATOR', 'magenta'))
 
-        self._identity = identity
+        self.__identity = identity
         self._group_name = group_name
         self._evt_quit = evt_quit
         self._idx = idx
@@ -58,7 +58,7 @@ class ZMQ_worker(Process):
         self._context = zmq.Context()
         # 消费者 接收代理 数据
         self._receiver = self._context.socket(zmq.SUB)
-        self._receiver.setsockopt(zmq.SUBSCRIBE, self._identity)
+        self._receiver.setsockopt(zmq.SUBSCRIBE, self.__identity)
         # self._receiver.setsockopt(zmq.SUBSCRIBE, b'')
 
         # self._receiver.connect('tcp://{}:{}'.format(self._ip, self._port))
@@ -105,8 +105,8 @@ class ZMQ_worker(Process):
 
 
 class ZMQ_sink(Process):
-    def __init__(self,queue_size,group_name,evt_quit):
-        super(ZMQ_sink,self).__init__(daemon=True)
+    def __init__(self,queue_size,group_name,evt_quit,daemon=False):
+        super(ZMQ_sink,self).__init__(daemon=daemon)
 
         self.logger = set_logger(colored('VENTILATOR', 'magenta'))
 
@@ -183,10 +183,10 @@ class ZMQ_sink(Process):
         self.locker.release()
 
 
-# 数据生产者 , 结果消费者
+
 class ZMQ_manager(Process):
-    def __init__(self,idx,queue_size,group_name,evt_quit):
-        super(ZMQ_manager, self).__init__(daemon=True)
+    def __init__(self,idx,queue_size,group_name,evt_quit,daemon=False):
+        super(ZMQ_manager, self).__init__(daemon=daemon)
 
         self.logger = set_logger(colored('VENTILATOR', 'magenta'))
         self.group_name = group_name

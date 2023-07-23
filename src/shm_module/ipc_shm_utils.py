@@ -25,8 +25,9 @@ class SHM_manager(Process):
                  input_queue,
                  output_queue,
                  is_log_time,
-                 idx):
-        super().__init__(daemon=True)
+                 idx,
+                 daemon=False):
+        super().__init__(daemon=daemon)
         self._logger = set_logger(colored('VENTILATOR', 'magenta'))
         self._evt_quit = evt_quit
         self._signal_list = signal_list
@@ -114,8 +115,9 @@ class SHM_woker(Process):
                  shm_size,
                  is_log_time,
                  idx,
-                 group_name):
-        super().__init__(daemon=True)
+                 group_name,
+                 daemon=False):
+        super().__init__(daemon=daemon)
         self._logger = set_logger(colored('VENTILATOR', 'magenta'))
 
         self._evt_quit = evt_quit

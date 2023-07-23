@@ -67,6 +67,7 @@ if __name__ == '__main__':
         evt_quit=evt_quit,
         queue_size=20,  # recv queue size
         is_log_time=True,  # whether log compute time
+        daemon=False,
     )
     instance.start()
 
