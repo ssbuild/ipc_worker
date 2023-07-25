@@ -15,7 +15,10 @@ from multiprocessing import Event,Condition,Process
 from datetime import datetime
 import numpy as np
 import pickle
-from .ipc_utils_func import set_logger,C_sharedata
+
+import typing
+
+from .ipc_utils_func import set_logger, C_sharedata, WorkState
 from termcolor import colored
 
 class SHM_manager(Process):
@@ -50,8 +53,8 @@ class SHM_manager(Process):
         return self._output_queue
 
     def get_real_data(self,buf):
-        len = struct.unpack('i',buf[4:8])[0]
-        d = buf[8:8+len]
+        len = struct.unpack('i',buf[12:16])[0]
+        d = buf[16:16+len]
         #队列不能序列化 bytes
         return pickle.loads(d)
 
@@ -72,7 +75,7 @@ class SHM_manager(Process):
             self._semaphore.acquire()
             for i,node in enumerate(shm_list):
                 flag = struct.unpack("i", node.buf[0:4])[0]
-                if flag == 0:
+                if flag == WorkState.WS_FREE:
                     s_d_id_list.append(i)
             if len(s_d_id_list) == 0:
                 self._semaphore.release()
@@ -87,21 +90,36 @@ class SHM_manager(Process):
             # print(d)
 
             d = msg
-            s_d.buf[4:8] = struct.pack("i", len(d))
-            s_d.buf[8:8 + len(d)] = d
-            s_d.buf[0:4] = struct.pack("i", 1)
+            s_d.buf[12:16] = struct.pack("i", len(d))
+            s_d.buf[16:16 + len(d)] = d
+            s_d.buf[0:4] = struct.pack("i", WorkState.WS_REQUEST)
             #是否信号，给其他进程
             self._semaphore.release()
             self._signal_list[sel_id].set()
             start_t = datetime.now()
+            Flag_step = False
             while True:
                 flag = struct.unpack("i", s_d.buf[0:4])[0]
-                if flag == 3:
+                if flag == WorkState.WS_FINISH:
                     break
-            p_result = self.get_real_data(s_d.buf)
+                elif flag == WorkState.WS_FINISH_STEP:
+                    Flag_step = True
+                    p_result = self.get_real_data(s_d.buf)
+                    worker_id = struct.unpack("i", s_d.buf[4:8])[0]
+                    seq_id = struct.unpack("i", s_d.buf[8:12])[0]
 
-            s_d.buf[0:4] = struct.pack('i',0)
-            task_queue2.put((request_id,p_result))
+                    s_d.buf[0:4] = struct.pack('i', WorkState.WS_FREE)
+                    task_queue2.put((request_id,worker_id,seq_id, p_result))
+            if not Flag_step:
+                p_result = self.get_real_data(s_d.buf)
+                worker_id = struct.unpack("i", s_d.buf[4:8])[0]
+                seq_id = struct.unpack("i", s_d.buf[8:12])[0]
+
+                s_d.buf[0:4] = struct.pack('i',WorkState.WS_FREE)
+                task_queue2.put((request_id,worker_id,seq_id,p_result))
+            else:
+                s_d.buf[0:4] = struct.pack('i', WorkState.WS_FREE)
+
             if self._is_log_time:
                 deata = datetime.now() - start_t
                 micros = deata.seconds * 1000 + deata.microseconds / 1000
@@ -152,23 +170,40 @@ class SHM_woker(Process):
                     break
                 self._semaphore.acquire()
                 flag = struct.unpack("i", s_data.buf[0:4])[0]
-                if flag != 1:
+                if flag != WorkState.WS_REQUEST:
                     self._semaphore.release()
                     continue
                 self._evt_signal.clear()
-                #工作者接收任务，修改工作标志
-                s_data.buf[0:4] = struct.pack('i',2)
+
+                s_data.buf[0:4] = struct.pack('i',WorkState.WS_RECIEVE)
                 self._semaphore.release()
-                msg_size = struct.unpack("i", s_data.buf[4:8])[0]
-                msg = s_data.buf[8:8 + msg_size]
+
+                # s_data.buf[8:12] = struct.pack('i',0)
+
+                msg_size = struct.unpack("i", s_data.buf[12:16])[0]
+                msg = s_data.buf[16:16 + msg_size]
                 request_data = pickle.loads(msg)
                 start_t = datetime.now()
-                X = self.run_once(request_data)
-                X = pickle.dumps(X)
-
-                s_data.buf[4:8] = struct.pack("i", len(X))
-                s_data.buf[8:8 + len(X)] = X
-                s_data.buf[0:4] = struct.pack("i", 3)
+                XX = self.run_once(request_data)
+                seq_id = 0
+                if isinstance(XX, typing.Generator):
+                    for X in XX:
+                        seq_id += 1
+                        X = pickle.dumps(X)
+                        s_data.buf[4:8] = struct.pack('i', self._idx)
+                        s_data.buf[8:12] = struct.pack('i', seq_id)
+                        s_data.buf[12:16] = struct.pack("i", len(X))
+                        s_data.buf[16:16 + len(X)] = X
+                        s_data.buf[0:4] = struct.pack("i", WorkState.WS_FINISH_STEP)
+                        while struct.unpack("i", s_data.buf[0:4])[0] != WorkState.WS_FREE:
+                            continue
+                else:
+                    X = pickle.dumps(XX)
+                    s_data.buf[4:8] = struct.pack('i', self._idx)
+                    s_data.buf[8:12] = struct.pack('i', seq_id)
+                    s_data.buf[12:16] = struct.pack("i", len(X))
+                    s_data.buf[16:16 + len(X)] = X
+                    s_data.buf[0:4] = struct.pack("i", WorkState.WS_FINISH)
 
                 if self._is_log_time:
                     deata = datetime.now() - start_t

@@ -3,6 +3,7 @@
 # @FileName: zmq_utils.py
 import json
 
+import typing
 import zmq
 import time
 import uuid
@@ -85,9 +86,18 @@ class ZMQ_worker(Process):
             msg_size = len(msg)
             request_data = pickle.loads(msg)
             start_t = datetime.now()
-            X = self.run_once(request_data)
-            X = pickle.dumps(X)
-            self._sender.send_multipart([b_request_id,X])
+            XX = self.run_once(request_data)
+            seq_id = 0
+
+            if isinstance(XX, typing.Generator):
+                for X in XX:
+                    seq_id += 1
+                    X = pickle.dumps(X)
+                    self._sender.send_multipart([b_request_id,int.to_bytes(self._idx,4,byteorder="little",signed=False),int.to_bytes(seq_id,4,byteorder="little",signed=False),X])
+            else:
+                X = pickle.dumps(XX)
+                self._sender.send_multipart([b_request_id,int.to_bytes(self._idx,4,byteorder="little",signed=False),int.to_bytes(seq_id,4,byteorder="little",signed=False), X])
+
             if self._is_log_time:
                 deata = datetime.now() - start_t
                 micros = deata.seconds * 1000 + deata.microseconds / 1000
@@ -135,7 +145,7 @@ class ZMQ_sink(Process):
                     self.signal.clear()
                     is_end = True
                 else:
-                    r_id,response = self.queue.get()
+                    r_id,w_id,seq_id,response = self.queue.get()
                     if r_id != request_id:
                         self.pending_response[r_id] = response
                     else:
@@ -167,9 +177,11 @@ class ZMQ_sink(Process):
         self.__processinit__()
 
         while not self.evt_quit.is_set():
-            request_id,response = self.receiver.recv_multipart()
+            request_id,w_id,seq_id,response = self.receiver.recv_multipart()
             r_id = int.from_bytes(request_id, byteorder='little', signed=False)
-            self.queue.put((r_id,response))
+            w_id = int.from_bytes(w_id, byteorder='little', signed=False)
+            seq_id = int.from_bytes(seq_id, byteorder='little', signed=False)
+            self.queue.put((r_id,w_id,seq_id,response))
             self.signal.set()
 
         self.close()

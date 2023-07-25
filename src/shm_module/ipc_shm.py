@@ -115,7 +115,7 @@ class IPC_shm:
                     self.pending_request.remove(request_id)
                     is_end = True
                 else:
-                    r_id, response = self.__output_queue.get()
+                    r_id,_,seq_id, response = self.__output_queue.get()
                     if r_id != request_id:
                         self.pending_response[r_id] = response
                     else:

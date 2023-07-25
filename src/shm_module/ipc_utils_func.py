@@ -3,11 +3,20 @@
 # @Author  : tk
 
 import os
+from enum import Enum
 from termcolor import colored
 from multiprocessing import shared_memory, Event, Condition
 from ..utils import set_logger
 
+
 logger = set_logger(colored('VENTILATOR', 'magenta'))
+
+class WorkState:
+    WS_FREE = 0
+    WS_REQUEST = 1
+    WS_RECIEVE = 2
+    WS_FINISH = 3
+    WS_FINISH_STEP = 4
 
 # 进程数据交换协议. 标志状态是否空闲（空闲 为0 ， 由数据请求方置为 1 ， 工作者接收该任务置为 2 ,工作完成处理方式置为 3 ， 数据请求方读取万结果后置为0）
 # 数据长度
