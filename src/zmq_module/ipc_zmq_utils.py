@@ -32,9 +32,7 @@ class ZMQ_worker(Process):
         self._idx = idx
         self._is_log_time = is_log_time
 
-
         self.signal = Event()
-
         self.__is_closed = False
 
 
@@ -217,6 +215,7 @@ class ZMQ_manager(Process):
         # self.sender.bind('tcp://*:{}'.format(self.port))
         self.addr = auto_bind(self.sender)
         self.queue.put(self.addr)
+
     def close(self):
         if not self.is_closed:
             self.is_closed = True
