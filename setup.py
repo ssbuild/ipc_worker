@@ -7,9 +7,6 @@ import shutil
 
 from setuptools import Extension,find_packages
 
-package_list = find_packages('src')
-package_dir= {'ipc_worker.' + k : 'src/' + k.replace('.','/') for k in package_list }
-package_dir.update({'ipc_worker': 'src'})
 
 
 def get_desc():
@@ -23,12 +20,12 @@ def get_desc():
     long_description_str = '```py' + '\n' + data_string + '\n' + '```' + '\n'
 
 
-    data_string = load_file(os.path.join(current_dir,'test_shm_ipc.py'))
+    data_string = load_file(os.path.join(current_dir,'tests/test_shm_ipc.py'))
 
 
     long_description_str += '```py' + '\n' + data_string + '\n'+ '```' + '\n'
 
-    data_string = load_file(os.path.join(current_dir, 'test_zmq_ipc.py'))
+    data_string = load_file(os.path.join(current_dir, 'tests/test_zmq_ipc.py'))
     long_description_str += '```py' + '\n' + data_string + '\n' + '```' + '\n'
 
     return long_description_str
@@ -42,21 +39,19 @@ if __name__ == '__main__':
     setuptools.setup(
         platforms=platforms_name,
         name="ipc-worker",
-        version="0.0.11",
+        version="0.0.12",
         author="ssbuild",
         author_email="9727464@qq.com",
         description=title,
         long_description_content_type='text/markdown',
         long_description= title + '\n\n' + get_desc(),
         url="https://github.com/ssbuild/ipc_worker",
-        #packages=setuptools.find_packages(exclude=['setup.py']),
-        packages=list(package_dir.keys()),   # 指定需要安装的模块
+        package_dir={"": "src"},
+        packages=find_packages("src"),
         include_package_data=True,
-        package_dir=package_dir,
         package_data={'': ['*.pyd','*.so','*.dat','*.h','*.c','*.java','.__data__.pys','.__meta__.pys']},
         install_requires=["termcolor"],
-        python_requires='>=3, <4', # python的依赖关系
-        #install_requires=['numpy>=1.18.0'],
+        python_requires='>=3, <4',
         classifiers=[
             'Development Status :: 5 - Production/Stable',
             'Intended Audience :: Developers',

@@ -3,3 +3,4 @@
 /src/__pycache__
 /ipc_worker.egg-info
 /dist
+/src/ipc_worker.egg-info

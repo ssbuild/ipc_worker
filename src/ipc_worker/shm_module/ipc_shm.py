@@ -74,7 +74,6 @@ class IPC_shm:
             self.__signal_list.append(worker.get_signal())
             self.__shm_name_list.append(shm_name)
             self.__woker_lst.append(worker)
-            #worker.start()
 
         semaphore = multiprocessing.Manager().Semaphore(manager_num)
         for i in range(manager_num):
