@@ -58,6 +58,12 @@ class SHM_manager(Process):
         #队列不能序列化 bytes
         return pickle.loads(d)
 
+    def release(self):
+        if not getattr(self,'__is_closed',False):
+            self._input_queue.close()
+            self._output_queue.close()
+            setattr(self,'__is_closed',True)
+
     def run(self):
         shm_list = []
         for shm_name in self._shm_name_list:
@@ -125,6 +131,8 @@ class SHM_manager(Process):
                 micros = deata.seconds * 1000 + deata.microseconds / 1000
                 self._logger.info('manager workerId {} , runtime {}'.format(sel_id, micros))
 
+        self.release()
+
 class SHM_woker(Process):
     def __init__(self,
                  evt_quit,
@@ -159,6 +167,12 @@ class SHM_woker(Process):
 
     def run_once(self,request_data):
         raise NotImplementedError
+
+    def release(self):
+        if not getattr(self, '__is_closed', False):
+            self._evt_signal.set()
+            self._evt_quit.set()
+            setattr(self, '__is_closed', True)
 
     def run(self):
         self.run_begin()
@@ -214,3 +228,4 @@ class SHM_woker(Process):
             self._logger.error(e)
         del s_data
         self.run_end()
+        self.release()

@@ -134,5 +134,9 @@ class IPC_shm:
             p.join()
 
     def terminate(self):
-        for p in self.__woker_lst:
+        for p in self.__woker_lst + self.__manager_lst:
+            try:
+                p.release()
+            except Exception as e:
+                pass
             p.terminate()

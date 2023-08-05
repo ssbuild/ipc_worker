@@ -105,15 +105,10 @@ class IPC_zmq:
             p.join()
 
     def terminate(self):
-        for p in self.__woker_lst:
+        for p in self.__woker_lst + self.__manager_lst:
             try:
-                p.close()
+                p.release()
             except Exception as e:
                 pass
             p.terminate()
-        for p in self.__manager_lst:
-            try:
-                p.close()
-            except Exception as e:
-                pass
-            p.terminate()
+

@@ -5,9 +5,6 @@ import json
 
 import typing
 import zmq
-import time
-import uuid
-from collections import namedtuple
 # from queue import Queue
 from multiprocessing import Queue
 from multiprocessing import Event,Process
@@ -69,20 +66,24 @@ class ZMQ_worker(Process):
         # self._sender.connect('tcp://{}:{}'.format(self._ip, self._port_out))
         self._sender.connect(self._addr_sink)
 
-    def close(self):
-        if not self.__is_closed:
-            self.__is_closed = True
-            self._receiver.close()
-            self._sender.close()
-            self._context.term()
+    def release(self):
+        try:
+            if not self.__is_closed:
+                self.__is_closed = True
+                self._receiver.close()
+                self._context.term()
+                self._sender.close()
+        except Exception as e:
+            print(e)
 
     def run(self):
         self.__processinit__()
         self.signal.set()
-
         self.run_begin()
         while not self._evt_quit.is_set():
             _,msg,b_request_id = self._receiver.recv_multipart()
+            if self.__is_closed:
+                break
             msg_size = len(msg)
             request_data = pickle.loads(msg)
             start_t = datetime.now()
@@ -102,8 +103,9 @@ class ZMQ_worker(Process):
                 deata = datetime.now() - start_t
                 micros = deata.seconds * 1000 + deata.microseconds / 1000
                 self._logger.info('worker msg_size {} , runtime {}'.format(msg_size, micros))
-        self.close()
+
         self.run_end()
+        self.release()
 
 
 
@@ -120,7 +122,7 @@ class ZMQ_sink(Process):
 
         self.group_name = group_name
 
-        self.is_closed = False
+        self.__is_closed = False
         self.evt_quit = evt_quit
         self.pending_request = set()
         self.pending_response = {}
@@ -167,24 +169,29 @@ class ZMQ_sink(Process):
         self.logger.info('group {} sink bind {}'.format(self.group_name,self.addr))
         self.queue.put(self.addr)
 
-    def close(self):
-        if not self.is_closed:
-            self.is_closed = True
-            self.receiver.close()
-            self.context.term()
+    def release(self):
+        try:
+            if not self.__is_closed:
+                self.__is_closed = True
+                self.receiver.close()
+                self.queue.close()
+                self.queue.join_thread()
+                self.context.term()
+        except Exception as e:
+            print(e)
 
     def run(self):
         self.__processinit__()
-
         while not self.evt_quit.is_set():
             request_id,w_id,seq_id,response = self.receiver.recv_multipart()
+            if self.__is_closed:
+                break
             r_id = int.from_bytes(request_id, byteorder='little', signed=False)
             w_id = int.from_bytes(w_id, byteorder='little', signed=False)
             seq_id = int.from_bytes(seq_id, byteorder='little', signed=False)
             self.queue.put((r_id,w_id,seq_id,response))
             self.signal.set()
-
-        self.close()
+        self.release()
 
 
     def add_request_id(self,request_id):
@@ -207,7 +214,7 @@ class ZMQ_manager(Process):
         self.evt_quit = evt_quit
         self.locker = Lock()
         self.addr = None
-        self.is_closed = False
+        self.__is_closed = False
 
     def wait_init(self):
         self.addr = self.queue.get()
@@ -228,19 +235,25 @@ class ZMQ_manager(Process):
         self.addr = auto_bind(self.sender)
         self.queue.put(self.addr)
 
-    def close(self):
-        if not self.is_closed:
-            self.is_closed = True
-            self.sender.close()
-            self.context.term()
+    def release(self):
+        try:
+            if not self.__is_closed:
+                self.__is_closed = True
+                self.queue.close()
+                self.queue.join_thread()
+                self.sender.close()
+                self.context.term()
+        except Exception as e:
+            print(e)
 
     def run(self):
         self.__processinit__()
         self.logger.info('group {} manager bind {}'.format(self.group_name,self.addr))
         while not self.evt_quit.is_set():
             request_id,identity,msg = self.queue.get()
+            if self.__is_closed:
+                break
             self.sender.send_multipart([identity,msg, request_id.to_bytes(4,byteorder='little',signed=False)])
-
-        self.close()
+        self.release()
 
 
