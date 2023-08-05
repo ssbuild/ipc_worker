@@ -18,7 +18,6 @@ Do not recommended run in windows , it will report an error as follow
             current process has finished its bootstrapping phase.
 
 '''
-
 import multiprocessing
 import os
 from ipc_worker import logger

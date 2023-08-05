@@ -1,12 +1,9 @@
 #coding: utf-8
-
 import multiprocessing
 from threading import Lock
 from .ipc_shm_utils import SHM_manager,SHM_woker
 import pickle
 # import numpy as np
-
-
 class SHM_process_worker(SHM_woker):
     def __init__(self,*args,**kwargs):
         super(SHM_process_worker,self).__init__(*args,**kwargs)

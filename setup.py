@@ -34,12 +34,11 @@ title = 'ipc-worker: Inter-Process Communication , muti Process Woker works by s
 current_dir = os.path.dirname(os.path.abspath(__file__))
 platforms_name = sys.platform + '_' + platform.machine()
 
-
 if __name__ == '__main__':
     setuptools.setup(
         platforms=platforms_name,
         name="ipc-worker",
-        version="0.0.14",
+        version="0.1.0",
         author="ssbuild",
         author_email="9727464@qq.com",
         description=title,

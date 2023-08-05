@@ -13,12 +13,10 @@ Do not recommended run in windows , it will report an error as follow
             current process has finished its bootstrapping phase.
 
 '''
-
 import multiprocessing
 import os
 from ipc_worker import logger
 from ipc_worker.ipc_shm_loader import IPC_shm,SHM_process_worker
-
 
 class My_worker(SHM_process_worker):
     def __init__(self,config,*args,**kwargs):
