@@ -1,5 +1,6 @@
 #coding: utf-8
 import multiprocessing
+import time
 from threading import Lock
 from .ipc_shm_utils import SHM_manager,SHM_woker
 import pickle
@@ -45,7 +46,7 @@ class IPC_shm:
 
 
         self.request_id = 0
-        self.pending_request = set()
+        self.pending_request = {}
         self.pending_response = {}
 
         self.locker = Lock()
@@ -83,7 +84,7 @@ class IPC_shm:
                                   is_log_time=is_log_time,
                                   idx=i)
             self.__manager_lst.append(manager)
-            #manager.start()
+        self.__last_t = time.time()
     def start(self):
         for w in self.__woker_lst:
             w.start()
@@ -94,21 +95,27 @@ class IPC_shm:
         self.locker.acquire()
         self.request_id += 1
         request_id = self.request_id
-        self.pending_request.add(request_id)
+        self.pending_request[request_id] = time.time()
         self.__input_queue.put((request_id,pickle.dumps(data)))
         self.locker.release()
         return request_id
 
     def get(self,request_id):
-        #data has serializated
+        c_t = time.time()
+        if (c_t - self.__last_t) / 600 > 0:
+            self.__last_t = c_t
+            invalid = set({rid for rid, t in self.pending_request.items() if (c_t - t) / 3600 > 0})
+            for rid in invalid:
+                self.pending_request.pop(rid)
+
         response = None
         while True:
             is_end = False
             self.locker.acquire(blocking=False)
             if request_id in self.pending_request:
+                self.pending_request[request_id] = time.time()
                 if request_id in self.pending_response:
                     response = self.pending_response.pop(request_id)
-                    self.pending_request.remove(request_id)
                     is_end = True
                 else:
                     r_id,_,seq_id, response = self.__output_queue.get()

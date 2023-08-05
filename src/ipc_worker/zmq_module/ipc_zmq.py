@@ -43,9 +43,6 @@ class IPC_zmq:
         self.__group_idenity = []
 
         assert isinstance(worker_args, tuple)
-
-        #ZMQ_worker(identity,evt_quit,ip,port, port_out)
-
         manager = ZMQ_manager(0, queue_size, group_name,evt_quit)
         self.__manager_lst.append(manager)
 
@@ -65,8 +62,7 @@ class IPC_zmq:
             )
             self.__group_idenity.append(identity)
             self.__woker_lst.append(worker)
-            #worker.start()
-
+        self.__last_worker_id = len(self.__group_idenity) - 1
     def start(self):
         for w in self.__manager_lst:
             w.start()
@@ -86,7 +82,8 @@ class IPC_zmq:
 
 
     def put(self,data):
-        idenity = random.choice(self.__group_idenity)
+        self.__last_worker_id = (self.__last_worker_id + 1 ) % len(self.__group_idenity)
+        idenity = self.__group_idenity[self.__last_worker_id]
         request_id = self.__manager_lst[0].put(idenity,pickle.dumps(data))
         self.__manager_lst[1].add_request_id(request_id)
         return request_id
