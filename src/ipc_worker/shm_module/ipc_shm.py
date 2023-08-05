@@ -119,7 +119,8 @@ class IPC_shm:
             else:
                 print('bad request_id {}'.format(request_id))
                 is_end = True
-            self.locker.release()
+            if self.locker.locked():
+                self.locker.release()
             if is_end:
                 break
         return response
