@@ -2,26 +2,22 @@
 # @Author  : tk
 # @FileName: zmq_utils.py
 import json
-
+import threading
+import time
 import typing
 import zmq
-# from queue import Queue
 from multiprocessing import Queue
 from multiprocessing import Event,Process
 from threading import Lock
-from ..utils import set_logger
-from termcolor import colored
 import pickle
 from datetime import datetime
 from .ipc_utils_func import auto_bind
-
 from ..utils import logger
 
 
 class ZMQ_worker(Process):
     def __init__(self,identity,group_name,evt_quit,is_log_time,idx,daemon=False):
         super(ZMQ_worker,self).__init__(daemon=daemon)
-
         self.__identity = identity
         self._group_name = group_name
         self._evt_quit = evt_quit
@@ -50,7 +46,6 @@ class ZMQ_worker(Process):
 
     def __processinit__(self):
         self._context = zmq.Context()
-        # 消费者 接收代理 数据
         self._receiver = self._context.socket(zmq.SUB)
         self._receiver.setsockopt(zmq.SUBSCRIBE, self.__identity)
         # self._receiver.setsockopt(zmq.SUBSCRIBE, b'')
@@ -58,7 +53,6 @@ class ZMQ_worker(Process):
         # self._receiver.connect('tcp://{}:{}'.format(self._ip, self._port))
         self._receiver.connect(self._addr_pub)
 
-        # 结果推送
         self._sender = self._context.socket(zmq.PUSH)
         self._sender.setsockopt(zmq.LINGER, 0)
         # self._sender.connect('tcp://{}:{}'.format(self._ip, self._port_out))
@@ -89,7 +83,6 @@ class ZMQ_worker(Process):
                 start_t = datetime.now()
                 XX = self.run_once(request_data)
                 seq_id = 0
-
                 if isinstance(XX, typing.Generator):
                     for X in XX:
                         seq_id += 1
@@ -102,16 +95,12 @@ class ZMQ_worker(Process):
                 if self._is_log_time:
                     deata = datetime.now() - start_t
                     micros = deata.seconds * 1000 + deata.microseconds / 1000
-                    logger.info('worker msg_size {} , runtime {}'.format(msg_size, micros))
+                    logger.debug('worker msg_size {} , runtime {}'.format(msg_size, micros))
         except Exception as e:
             print(e)
 
         self.run_end()
         self.release()
-
-
-
-
 
 
 
@@ -123,7 +112,7 @@ class ZMQ_sink(Process):
         self.group_name = group_name
         self.__is_closed = False
         self.evt_quit = evt_quit
-        self.pending_request = set()
+        self.pending_request = {}
         self.pending_response = {}
         self.queue = Queue(maxsize=queue_size)
         #
@@ -137,12 +126,12 @@ class ZMQ_sink(Process):
         response = None
         while True:
             is_end = False
-            self.signal.wait(0.01)
-            self.locker.acquire(blocking=False)
+            self.signal.wait(0.005)
+            self.locker.acquire(timeout=0.005)
             if request_id in self.pending_request:
+                self.pending_request[request_id] = time.time()
                 if request_id in self.pending_response:
                     response = self.pending_response.pop(request_id)
-                    self.pending_request.remove(request_id)
                     self.signal.clear()
                     is_end = True
                 else:
@@ -154,7 +143,8 @@ class ZMQ_sink(Process):
             else:
                 logger.error('bad request_id {}'.format(request_id))
                 is_end = True
-            self.locker.release()
+            if self.locker.locked():
+                self.locker.release()
             if is_end:
                 break
         return response
@@ -165,7 +155,7 @@ class ZMQ_sink(Process):
         self.receiver.setsockopt(zmq.LINGER, 0)
         # self.receiver.bind('tcp://*:{}'.format(self.port_out))
         self.addr = auto_bind(self.receiver)
-        logger.info('group {} sink bind {}'.format(self.group_name,self.addr))
+        logger.debug('group {} sink bind {}'.format(self.group_name,self.addr))
         self.queue.put(self.addr)
 
     def release(self):
@@ -179,14 +169,24 @@ class ZMQ_sink(Process):
         except Exception as e:
             ...
 
+
+
     def run(self):
         self.__processinit__()
-
         try:
+            last_t = time.time()
             while not self.evt_quit.is_set():
                 request_id,w_id,seq_id,response = self.receiver.recv_multipart()
                 if self.__is_closed:
                     break
+
+                c_t = time.time()
+                if (c_t - last_t) / 600 > 0:
+                    last_t = c_t
+                    invalid = set({rid for rid, t in self.pending_request.items() if (c_t - t) / 3600 > 0})
+                    for rid in invalid:
+                        self.pending_request.pop(rid)
+
                 r_id = int.from_bytes(request_id, byteorder='little', signed=False)
                 w_id = int.from_bytes(w_id, byteorder='little', signed=False)
                 seq_id = int.from_bytes(seq_id, byteorder='little', signed=False)
@@ -199,7 +199,7 @@ class ZMQ_sink(Process):
 
     def add_request_id(self,request_id):
         self.locker.acquire()
-        self.pending_request.add(request_id)
+        self.pending_request[request_id] = time.time()
         self.locker.release()
 
 
@@ -207,8 +207,6 @@ class ZMQ_sink(Process):
 class ZMQ_manager(Process):
     def __init__(self,idx,queue_size,group_name,evt_quit,daemon=False):
         super(ZMQ_manager, self).__init__(daemon=daemon)
-
-
         self.group_name = group_name
         self.request_id = 0
         self.idx = idx
@@ -251,9 +249,8 @@ class ZMQ_manager(Process):
 
     def run(self):
         self.__processinit__()
-        logger.info('group {} manager bind {}'.format(self.group_name,self.addr))
+        logger.debug('group {} manager bind {}'.format(self.group_name,self.addr))
         try:
-
             while not self.evt_quit.is_set():
                 request_id,identity,msg = self.queue.get()
                 if self.__is_closed:
