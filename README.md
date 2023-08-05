@@ -21,6 +21,7 @@ Do not recommended run in windows , it will report an error as follow
 
 import multiprocessing
 import os
+from ipc_worker import logger
 from ipc_worker.ipc_shm_loader import IPC_shm,SHM_process_worker
 
 
@@ -29,14 +30,14 @@ class My_worker(SHM_process_worker):
         super(My_worker,self).__init__(*args,**kwargs)
         #config info , use by yourself
 
-        self._logger.info('Process id {}, group name {} ,shm name {}'.format(self._idx,self._group_name,self._shm_name))
-        self._logger.info(config)
+        logger.info('Process id {}, group name {} ,shm name {}'.format(self._idx,self._group_name,self._shm_name))
+        logger.info(config)
         self.config = config
 
 
     #Process begin trigger this func
     def run_begin(self):
-        self._logger.info('worker pid {}...'.format(os.getpid()))
+        logger.info('worker pid {}...'.format(os.getpid()))
         self.handle = None
         pass
 

@@ -140,3 +140,11 @@ class IPC_shm:
             except Exception as e:
                 pass
             p.terminate()
+
+    @property
+    def manager_process_list(self):
+        return self.__manager_lst
+
+    @property
+    def woker_process_list(self):
+        return self.__woker_lst

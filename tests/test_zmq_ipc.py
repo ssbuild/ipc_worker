@@ -4,6 +4,7 @@
 
 import multiprocessing
 import os
+from ipc_worker import logger
 from ipc_worker.ipc_zmq_loader import IPC_zmq,ZMQ_process_worker
 '''
     demo ZMQ depend zmq
@@ -22,13 +23,13 @@ class My_worker(ZMQ_process_worker):
     def __init__(self,config,*args,**kwargs):
         super(My_worker,self).__init__(*args,**kwargs)
         #config info , use by yourself
-        self._logger.info('Process id {}, group name {} , identity {}'.format(self._idx,self._group_name,self._identity))
-        self._logger.info(config)
+        logger.info('Process id {}, group name {} , identity {}'.format(self._idx,self._group_name,self._identity))
+        logger.info(config)
         self.config = config
 
     #Process begin trigger this func
     def run_begin(self):
-        self._logger.info('worker pid {}...'.format(os.getpid()))
+        logger.info('worker pid {}...'.format(os.getpid()))
         self.handle = None
         pass
 

@@ -15,11 +15,11 @@ from multiprocessing import Event,Condition,Process
 from datetime import datetime
 import numpy as np
 import pickle
-
 import typing
+from .ipc_utils_func import C_sharedata, WorkState
+from ..utils import logger
 
-from .ipc_utils_func import set_logger, C_sharedata, WorkState
-from termcolor import colored
+
 
 class SHM_manager(Process):
     def __init__(self,evt_quit,
@@ -31,7 +31,6 @@ class SHM_manager(Process):
                  idx,
                  daemon=False):
         super().__init__(daemon=daemon)
-        self._logger = set_logger(colored('VENTILATOR', 'magenta'))
         self._evt_quit = evt_quit
         self._signal_list = signal_list
 
@@ -73,64 +72,66 @@ class SHM_manager(Process):
         task_queue2 = self._output_queue
 
         s_d_id_list = []
-        while True:
-            request_id,msg = task_queue1.get()
-            if self._evt_quit.is_set():
-                break
-            s_d_id_list.clear()
-            self._semaphore.acquire()
-            for i,node in enumerate(shm_list):
-                flag = struct.unpack("i", node.buf[0:4])[0]
-                if flag == WorkState.WS_FREE:
-                    s_d_id_list.append(i)
-            if len(s_d_id_list) == 0:
-                self._semaphore.release()
-                self._logger.info('service busy  , no worker consume')
-                task_queue1.put((request_id,msg))
-                continue
-            sel_id = random.choices(s_d_id_list)[0]
-            s_d = shm_list[sel_id]
-
-            #if isinstance(msg,dict) else msg
-            # d = pickle.dumps(msg)
-            # print(d)
-
-            d = msg
-            s_d.buf[12:16] = struct.pack("i", len(d))
-            s_d.buf[16:16 + len(d)] = d
-            s_d.buf[0:4] = struct.pack("i", WorkState.WS_REQUEST)
-            #是否信号，给其他进程
-            self._semaphore.release()
-            self._signal_list[sel_id].set()
-            start_t = datetime.now()
-            Flag_step = False
+        try:
             while True:
-                flag = struct.unpack("i", s_d.buf[0:4])[0]
-                if flag == WorkState.WS_FINISH:
+                request_id,msg = task_queue1.get()
+                if self._evt_quit.is_set():
                     break
-                elif flag == WorkState.WS_FINISH_STEP:
-                    Flag_step = True
+                s_d_id_list.clear()
+                self._semaphore.acquire()
+                for i,node in enumerate(shm_list):
+                    flag = struct.unpack("i", node.buf[0:4])[0]
+                    if flag == WorkState.WS_FREE:
+                        s_d_id_list.append(i)
+                if len(s_d_id_list) == 0:
+                    self._semaphore.release()
+                    logger.info('service busy  , no worker consume')
+                    task_queue1.put((request_id,msg))
+                    continue
+                sel_id = random.choices(s_d_id_list)[0]
+                s_d = shm_list[sel_id]
+
+                #if isinstance(msg,dict) else msg
+                # d = pickle.dumps(msg)
+                # print(d)
+
+                d = msg
+                s_d.buf[12:16] = struct.pack("i", len(d))
+                s_d.buf[16:16 + len(d)] = d
+                s_d.buf[0:4] = struct.pack("i", WorkState.WS_REQUEST)
+                #是否信号，给其他进程
+                self._semaphore.release()
+                self._signal_list[sel_id].set()
+                start_t = datetime.now()
+                Flag_step = False
+                while True:
+                    flag = struct.unpack("i", s_d.buf[0:4])[0]
+                    if flag == WorkState.WS_FINISH:
+                        break
+                    elif flag == WorkState.WS_FINISH_STEP:
+                        Flag_step = True
+                        p_result = self.get_real_data(s_d.buf)
+                        worker_id = struct.unpack("i", s_d.buf[4:8])[0]
+                        seq_id = struct.unpack("i", s_d.buf[8:12])[0]
+
+                        s_d.buf[0:4] = struct.pack('i', WorkState.WS_FREE)
+                        task_queue2.put((request_id,worker_id,seq_id, p_result))
+                if not Flag_step:
                     p_result = self.get_real_data(s_d.buf)
                     worker_id = struct.unpack("i", s_d.buf[4:8])[0]
                     seq_id = struct.unpack("i", s_d.buf[8:12])[0]
 
+                    s_d.buf[0:4] = struct.pack('i',WorkState.WS_FREE)
+                    task_queue2.put((request_id,worker_id,seq_id,p_result))
+                else:
                     s_d.buf[0:4] = struct.pack('i', WorkState.WS_FREE)
-                    task_queue2.put((request_id,worker_id,seq_id, p_result))
-            if not Flag_step:
-                p_result = self.get_real_data(s_d.buf)
-                worker_id = struct.unpack("i", s_d.buf[4:8])[0]
-                seq_id = struct.unpack("i", s_d.buf[8:12])[0]
 
-                s_d.buf[0:4] = struct.pack('i',WorkState.WS_FREE)
-                task_queue2.put((request_id,worker_id,seq_id,p_result))
-            else:
-                s_d.buf[0:4] = struct.pack('i', WorkState.WS_FREE)
-
-            if self._is_log_time:
-                deata = datetime.now() - start_t
-                micros = deata.seconds * 1000 + deata.microseconds / 1000
-                self._logger.info('manager workerId {} , runtime {}'.format(sel_id, micros))
-
+                if self._is_log_time:
+                    deata = datetime.now() - start_t
+                    micros = deata.seconds * 1000 + deata.microseconds / 1000
+                    logger.info('manager workerId {} , runtime {}'.format(sel_id, micros))
+        except Exception as e:
+            print(e)
         self.release()
 
 class SHM_woker(Process):
@@ -144,7 +145,6 @@ class SHM_woker(Process):
                  group_name,
                  daemon=False):
         super().__init__(daemon=daemon)
-        self._logger = set_logger(colored('VENTILATOR', 'magenta'))
 
         self._evt_quit = evt_quit
         self._semaphore= semaphore
@@ -222,10 +222,10 @@ class SHM_woker(Process):
                 if self._is_log_time:
                     deata = datetime.now() - start_t
                     micros = deata.seconds * 1000 + deata.microseconds / 1000
-                    self._logger.info('worker msg_size {} , runtime {}'.format(msg_size,micros))
+                    logger.info('worker msg_size {} , runtime {}'.format(msg_size,micros))
         except Exception as e:
             traceback.print_exc()
-            self._logger.error(e)
+            logger.error(e)
         del s_data
         self.run_end()
         self.release()

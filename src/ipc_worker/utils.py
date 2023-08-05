@@ -3,9 +3,7 @@
 # @Author  : tk
 
 import logging
-import queue
-from collections import deque
-
+from termcolor import colored
 
 
 def set_logger(context, verbose=False):
@@ -24,3 +22,5 @@ def set_logger(context, verbose=False):
     logger.addHandler(console_handler)
     return logger
 
+
+logger = set_logger(colored('VENTILATOR', 'magenta'))

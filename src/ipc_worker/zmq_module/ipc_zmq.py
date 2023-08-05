@@ -4,7 +4,6 @@
 import multiprocessing
 import random
 import time
-
 from .ipc_zmq_utils import ZMQ_manager,ZMQ_sink,ZMQ_worker
 import pickle
 
@@ -93,7 +92,6 @@ class IPC_zmq:
         return request_id
 
     def get(self,request_id):
-        #data has serializated
         d = self.__manager_lst[1].get(request_id)
         return d if d is None else pickle.loads(d)
 
@@ -103,6 +101,14 @@ class IPC_zmq:
         time.sleep(1)
         for p in self.__woker_lst:
             p.join()
+
+    @property
+    def manager_process_list(self):
+        return self.__manager_lst
+
+    @property
+    def woker_process_list(self):
+        return self.__woker_lst
 
     def terminate(self):
         for p in self.__woker_lst + self.__manager_lst:

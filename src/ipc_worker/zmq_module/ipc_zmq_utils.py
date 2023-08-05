@@ -15,14 +15,12 @@ import pickle
 from datetime import datetime
 from .ipc_utils_func import auto_bind
 
-
+from ..utils import logger
 
 
 class ZMQ_worker(Process):
     def __init__(self,identity,group_name,evt_quit,is_log_time,idx,daemon=False):
         super(ZMQ_worker,self).__init__(daemon=daemon)
-
-        self._logger = set_logger(colored('VENTILATOR', 'magenta'))
 
         self.__identity = identity
         self._group_name = group_name
@@ -74,35 +72,39 @@ class ZMQ_worker(Process):
                 self._context.term()
                 self._sender.close()
         except Exception as e:
-            print(e)
+            ...
 
     def run(self):
         self.__processinit__()
         self.signal.set()
         self.run_begin()
-        while not self._evt_quit.is_set():
-            _,msg,b_request_id = self._receiver.recv_multipart()
-            if self.__is_closed:
-                break
-            msg_size = len(msg)
-            request_data = pickle.loads(msg)
-            start_t = datetime.now()
-            XX = self.run_once(request_data)
-            seq_id = 0
 
-            if isinstance(XX, typing.Generator):
-                for X in XX:
-                    seq_id += 1
-                    X = pickle.dumps(X)
-                    self._sender.send_multipart([b_request_id,int.to_bytes(self._idx,4,byteorder="little",signed=False),int.to_bytes(seq_id,4,byteorder="little",signed=False),X])
-            else:
-                X = pickle.dumps(XX)
-                self._sender.send_multipart([b_request_id,int.to_bytes(self._idx,4,byteorder="little",signed=False),int.to_bytes(seq_id,4,byteorder="little",signed=False), X])
+        try:
+            while not self._evt_quit.is_set():
+                _,msg,b_request_id = self._receiver.recv_multipart()
+                if self.__is_closed:
+                    break
+                msg_size = len(msg)
+                request_data = pickle.loads(msg)
+                start_t = datetime.now()
+                XX = self.run_once(request_data)
+                seq_id = 0
 
-            if self._is_log_time:
-                deata = datetime.now() - start_t
-                micros = deata.seconds * 1000 + deata.microseconds / 1000
-                self._logger.info('worker msg_size {} , runtime {}'.format(msg_size, micros))
+                if isinstance(XX, typing.Generator):
+                    for X in XX:
+                        seq_id += 1
+                        X = pickle.dumps(X)
+                        self._sender.send_multipart([b_request_id,int.to_bytes(self._idx,4,byteorder="little",signed=False),int.to_bytes(seq_id,4,byteorder="little",signed=False),X])
+                else:
+                    X = pickle.dumps(XX)
+                    self._sender.send_multipart([b_request_id,int.to_bytes(self._idx,4,byteorder="little",signed=False),int.to_bytes(seq_id,4,byteorder="little",signed=False), X])
+
+                if self._is_log_time:
+                    deata = datetime.now() - start_t
+                    micros = deata.seconds * 1000 + deata.microseconds / 1000
+                    logger.info('worker msg_size {} , runtime {}'.format(msg_size, micros))
+        except Exception as e:
+            print(e)
 
         self.run_end()
         self.release()
@@ -118,10 +120,7 @@ class ZMQ_sink(Process):
     def __init__(self,queue_size,group_name,evt_quit,daemon=False):
         super(ZMQ_sink,self).__init__(daemon=daemon)
 
-        self.logger = set_logger(colored('VENTILATOR', 'magenta'))
-
         self.group_name = group_name
-
         self.__is_closed = False
         self.evt_quit = evt_quit
         self.pending_request = set()
@@ -153,7 +152,7 @@ class ZMQ_sink(Process):
                     else:
                         is_end = True
             else:
-                self.logger.error('bad request_id {}'.format(request_id))
+                logger.error('bad request_id {}'.format(request_id))
                 is_end = True
             self.locker.release()
             if is_end:
@@ -166,7 +165,7 @@ class ZMQ_sink(Process):
         self.receiver.setsockopt(zmq.LINGER, 0)
         # self.receiver.bind('tcp://*:{}'.format(self.port_out))
         self.addr = auto_bind(self.receiver)
-        self.logger.info('group {} sink bind {}'.format(self.group_name,self.addr))
+        logger.info('group {} sink bind {}'.format(self.group_name,self.addr))
         self.queue.put(self.addr)
 
     def release(self):
@@ -178,19 +177,23 @@ class ZMQ_sink(Process):
                 self.queue.join_thread()
                 self.context.term()
         except Exception as e:
-            print(e)
+            ...
 
     def run(self):
         self.__processinit__()
-        while not self.evt_quit.is_set():
-            request_id,w_id,seq_id,response = self.receiver.recv_multipart()
-            if self.__is_closed:
-                break
-            r_id = int.from_bytes(request_id, byteorder='little', signed=False)
-            w_id = int.from_bytes(w_id, byteorder='little', signed=False)
-            seq_id = int.from_bytes(seq_id, byteorder='little', signed=False)
-            self.queue.put((r_id,w_id,seq_id,response))
-            self.signal.set()
+
+        try:
+            while not self.evt_quit.is_set():
+                request_id,w_id,seq_id,response = self.receiver.recv_multipart()
+                if self.__is_closed:
+                    break
+                r_id = int.from_bytes(request_id, byteorder='little', signed=False)
+                w_id = int.from_bytes(w_id, byteorder='little', signed=False)
+                seq_id = int.from_bytes(seq_id, byteorder='little', signed=False)
+                self.queue.put((r_id,w_id,seq_id,response))
+                self.signal.set()
+        except Exception as e:
+            print(e)
         self.release()
 
 
@@ -205,7 +208,7 @@ class ZMQ_manager(Process):
     def __init__(self,idx,queue_size,group_name,evt_quit,daemon=False):
         super(ZMQ_manager, self).__init__(daemon=daemon)
 
-        self.logger = set_logger(colored('VENTILATOR', 'magenta'))
+
         self.group_name = group_name
         self.request_id = 0
         self.idx = idx
@@ -244,16 +247,20 @@ class ZMQ_manager(Process):
                 self.sender.close()
                 self.context.term()
         except Exception as e:
-            print(e)
+            ...
 
     def run(self):
         self.__processinit__()
-        self.logger.info('group {} manager bind {}'.format(self.group_name,self.addr))
-        while not self.evt_quit.is_set():
-            request_id,identity,msg = self.queue.get()
-            if self.__is_closed:
-                break
-            self.sender.send_multipart([identity,msg, request_id.to_bytes(4,byteorder='little',signed=False)])
+        logger.info('group {} manager bind {}'.format(self.group_name,self.addr))
+        try:
+
+            while not self.evt_quit.is_set():
+                request_id,identity,msg = self.queue.get()
+                if self.__is_closed:
+                    break
+                self.sender.send_multipart([identity,msg, request_id.to_bytes(4,byteorder='little',signed=False)])
+        except Exception as e:
+            print(e)
         self.release()
 
 

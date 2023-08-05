@@ -2,14 +2,8 @@
 # @Time    : 2021/11/23 10:03
 # @Author  : tk
 
-import os
-from enum import Enum
-from termcolor import colored
 from multiprocessing import shared_memory, Event, Condition
-from ..utils import set_logger
-
-
-logger = set_logger(colored('VENTILATOR', 'magenta'))
+from ..utils import logger
 
 class WorkState:
     WS_FREE = 0
