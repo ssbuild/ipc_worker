@@ -100,7 +100,7 @@ class IPC_shm:
         self.locker.release()
         return request_id
 
-    def get(self,request_id):
+    def __clean__private__(self):
         c_t = time.time()
         if (c_t - self.__last_t) / 600 > 0:
             self.__last_t = c_t
@@ -108,10 +108,14 @@ class IPC_shm:
             for rid in invalid:
                 self.pending_request.pop(rid)
 
+    def get(self,request_id):
         response = None
         while True:
             is_end = False
             self.locker.acquire(blocking=False)
+            if self.locker.locked():
+                self.__clean__private__()
+
             if request_id in self.pending_request:
                 self.pending_request[request_id] = time.time()
                 if request_id in self.pending_response:
