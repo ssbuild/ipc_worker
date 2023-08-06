@@ -112,11 +112,10 @@ class ZMQ_sink(Process):
         self.group_name = group_name
         self.__is_closed = False
         self.evt_quit = evt_quit
-        self.pending_request = {}
-        self.pending_response = {}
+
         self.queue = Queue(maxsize=queue_size)
         #
-        self.locker = Lock()
+
         self.signal = Event()
         self.addr = None
 
@@ -124,51 +123,11 @@ class ZMQ_sink(Process):
     def wait_init(self):
         self.addr = self.queue.get()
 
-    def add_request_id(self, request_id):
-        self.locker.acquire()
-        self.pending_request[request_id] = time.time()
-        self.locker.release()
+    def get_queue(self) -> Queue:
+        return self.queue
 
-    def __clean__private__(self):
-        c_t = time.time()
-        if (c_t - self.__last_t) / 600 > 0:
-            self.__last_t = c_t
-            invalid = set({rid for rid, t in self.pending_request.items() if (c_t - t) / 3600 > 0})
-            logger.debug('remove {}'.format(str(list(invalid))))
-            for rid in invalid:
-                self.pending_request.pop(rid)
-
-    def get(self,request_id):
-        if getattr(self,'__last_t',None) is None:
-            self.__last_t = time.time()
-
-        response = None
-        while True:
-            is_end = False
-            self.signal.wait(0.005)
-            self.locker.acquire(timeout=0.005)
-            if self.locker.locked():
-                self.__clean__private__()
-            if request_id in self.pending_request:
-                self.pending_request[request_id] = time.time()
-                if request_id in self.pending_response:
-                    response = self.pending_response.pop(request_id)
-                    self.signal.clear()
-                    is_end = True
-                else:
-                    r_id,w_id,seq_id,response = self.queue.get()
-                    if r_id != request_id:
-                        self.pending_response[r_id] = response
-                    else:
-                        is_end = True
-            else:
-                logger.error('bad request_id {}'.format(request_id))
-                is_end = True
-            if self.locker.locked():
-                self.locker.release()
-            if is_end:
-                break
-        return response
+    def get_signal(self) -> Event:
+        return self.signal
 
     def __processinit__(self):
         self.context = zmq.Context()
