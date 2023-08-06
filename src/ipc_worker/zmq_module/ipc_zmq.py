@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 # @Time    : 2021/11/29 13:45
 # @Author  : tk
+import math
 import multiprocessing
+import os
 import random
+import threading
 import time
+from threading import Lock
 from .ipc_zmq_utils import ZMQ_manager,ZMQ_sink,ZMQ_worker
 import pickle
+from ..utils import logger
 
 
 
@@ -63,6 +68,10 @@ class IPC_zmq:
             self.__group_idenity.append(identity)
             self.__woker_lst.append(worker)
         self.__last_worker_id = len(self.__group_idenity) - 1
+        self.pending_request = {}
+        self.pending_response = {}
+        self.locker = Lock()
+        self.__last_t = time.time()
     def start(self):
         for w in self.__manager_lst:
             w.start()
@@ -85,12 +94,61 @@ class IPC_zmq:
         self.__last_worker_id = (self.__last_worker_id + 1 ) % len(self.__group_idenity)
         idenity = self.__group_idenity[self.__last_worker_id]
         request_id = self.__manager_lst[0].put(idenity,pickle.dumps(data))
-        self.__manager_lst[1].add_request_id(request_id)
+        self.locker.acquire()
+        self.pending_request[request_id] = time.time() # (os.getpid(), threading.get_native_id(),time.time())
+        self.locker.release()
         return request_id
 
     def get(self,request_id):
-        d = self.__manager_lst[1].get(request_id)
+        d = self.__get_private__(request_id)
         return d if d is None else pickle.loads(d)
+
+
+    def __clean__private__(self):
+        c_t = time.time()
+        if math.floor((c_t - self.__last_t) / 600) > 0:
+            self.__last_t = c_t
+            invalid = set({rid for rid, t in self.pending_request.items() if math.floor((c_t - t) / 3600) > 0})
+            logger.debug('remove {}'.format(str(list(invalid))))
+            for rid in invalid:
+                self.pending_request.pop(rid)
+
+    def __get_private__(self, request_id):
+        sink = self.__manager_lst[1]
+        response = None
+        is_end = False
+        timeout = 0.005
+        while not is_end:
+            sink.get_signal().wait(timeout)
+            self.locker.acquire(timeout=timeout)
+            if not self.locker.locked():
+                continue
+            if request_id in self.pending_request:
+                self.pending_request[request_id] = time.time()
+                if request_id in self.pending_response:
+                    response = self.pending_response.pop(request_id)
+                    is_end = True
+                else:
+                    r_id, w_id, seq_id, response = sink.get_queue().get()
+                    if r_id != request_id:
+                        self.pending_response[r_id] = response
+                    else:
+                        is_end = True
+            else:
+                logger.error('bad request_id {}'.format(request_id))
+                is_end = True
+            if self.locker.locked():
+                self.locker.release()
+            if is_end:
+                break
+
+        self.locker.acquire()
+        self.__clean__private__()
+        self.locker.release()
+        return response
+
+
+
 
     def join(self):
         for p in self.__manager_lst:
