@@ -120,19 +120,28 @@ class ZMQ_sink(Process):
         self.signal = Event()
         self.addr = None
 
-        self.__last_t = time.time()
+
     def wait_init(self):
         self.addr = self.queue.get()
+
+    def add_request_id(self, request_id):
+        self.locker.acquire()
+        self.pending_request[request_id] = time.time()
+        self.locker.release()
 
     def __clean__private__(self):
         c_t = time.time()
         if (c_t - self.__last_t) / 600 > 0:
             self.__last_t = c_t
             invalid = set({rid for rid, t in self.pending_request.items() if (c_t - t) / 3600 > 0})
+            logger.debug('remove {}'.format(str(list(invalid))))
             for rid in invalid:
                 self.pending_request.pop(rid)
 
     def get(self,request_id):
+        if getattr(self,'__last_t',None) is None:
+            self.__last_t = time.time()
+
         response = None
         while True:
             is_end = False
@@ -200,10 +209,7 @@ class ZMQ_sink(Process):
         self.release()
 
 
-    def add_request_id(self,request_id):
-        self.locker.acquire()
-        self.pending_request[request_id] = time.time()
-        self.locker.release()
+
 
 
 
