@@ -8,7 +8,6 @@ import random
 import threading
 import time
 from threading import Lock
-
 from .ipc_zmq_utils import ZMQ_manager,ZMQ_sink,ZMQ_worker
 import pickle
 from ..utils import logger
@@ -107,9 +106,9 @@ class IPC_zmq:
 
     def __clean__private__(self):
         c_t = time.time()
-        if math.floor((c_t - self.__last_t)) / 600 > 0:
+        if math.floor((c_t - self.__last_t) / 600) > 0:
             self.__last_t = c_t
-            invalid = set({rid for rid, t in self.pending_request.items() if math.floor((c_t - t)) / 3600 > 0})
+            invalid = set({rid for rid, t in self.pending_request.items() if math.floor((c_t - t) / 3600) > 0})
             logger.debug('remove {}'.format(str(list(invalid))))
             for rid in invalid:
                 self.pending_request.pop(rid)
