@@ -8,7 +8,6 @@ import typing
 import zmq
 from multiprocessing import Queue
 from multiprocessing import Event,Process
-from threading import Lock
 import pickle
 from datetime import datetime
 from .ipc_utils_func import auto_bind
@@ -181,7 +180,7 @@ class ZMQ_manager(Process):
 
         self.queue = Queue(queue_size)
         self.evt_quit = evt_quit
-        self.locker = Lock()
+        self.locker = threading.Lock()
         self.addr = None
         self.__is_closed = False
 
@@ -227,5 +226,3 @@ class ZMQ_manager(Process):
         except Exception as e:
             print(e)
         self.release()
-
-

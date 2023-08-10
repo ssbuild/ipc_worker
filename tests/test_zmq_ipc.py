@@ -5,10 +5,11 @@ import multiprocessing
 import os
 from ipc_worker import logger
 from ipc_worker.ipc_zmq_loader import IPC_zmq,ZMQ_process_worker
+
+import torch
 '''
     demo ZMQ depend zmq
     pip install pyzmq
-    
     test pass >= python3.6
 '''
 
@@ -40,6 +41,9 @@ class My_worker(ZMQ_process_worker):
     #any data put will trigger this func
     def run_once(self,request_data):
         #process request_data
+        print(torch.cuda.device_count(),torch.cuda.current_device())
+
+
         if isinstance(request_data,dict):
             request_data['b'] = 200
         if self.handle is not None:
@@ -49,6 +53,8 @@ class My_worker(ZMQ_process_worker):
 
 
 if __name__ == '__main__':
+    torch.multiprocessing.set_start_method('spawn',force=True)
+
     config = {
         "anything" : "anything",
         "aa": 100

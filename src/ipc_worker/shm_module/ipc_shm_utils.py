@@ -3,11 +3,6 @@
 # @Author  : tk
 import json
 import random
-# import sys
-# import time
-# import os
-# import struct
-# import copy
 import struct
 import multiprocessing
 import traceback
@@ -18,7 +13,6 @@ import pickle
 import typing
 from .ipc_utils_func import C_sharedata, WorkState
 from ..utils import logger
-
 
 
 class SHM_manager(Process):

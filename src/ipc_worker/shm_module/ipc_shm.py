@@ -2,11 +2,12 @@
 import math
 import multiprocessing
 import time
-from threading import Lock
+import threading
 from .ipc_shm_utils import SHM_manager,SHM_woker
 import pickle
 from ..utils import logger
-# import numpy as np
+
+
 class SHM_process_worker(SHM_woker):
     def __init__(self,*args,**kwargs):
         super(SHM_process_worker,self).__init__(*args,**kwargs)
@@ -51,7 +52,7 @@ class IPC_shm:
         self.pending_request = {}
         self.pending_response = {}
 
-        self.locker = Lock()
+        self.locker = threading.Lock()
 
         assert isinstance(worker_args, tuple)
         self.__input_queue = multiprocessing.Manager().Queue(queue_size)

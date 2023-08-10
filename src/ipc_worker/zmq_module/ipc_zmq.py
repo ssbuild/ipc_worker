@@ -7,7 +7,6 @@ import os
 import random
 import threading
 import time
-from threading import Lock
 from .ipc_zmq_utils import ZMQ_manager,ZMQ_sink,ZMQ_worker
 import pickle
 from ..utils import logger
@@ -70,7 +69,7 @@ class IPC_zmq:
         self.__last_worker_id = len(self.__group_idenity) - 1
         self.pending_request = {}
         self.pending_response = {}
-        self.locker = Lock()
+        self.locker = threading.Lock()
         self.__last_t = time.time()
     def start(self):
         for w in self.__manager_lst:
@@ -95,7 +94,7 @@ class IPC_zmq:
         idenity = self.__group_idenity[self.__last_worker_id]
         request_id = self.__manager_lst[0].put(idenity,pickle.dumps(data))
         self.locker.acquire()
-        self.pending_request[request_id] = time.time() # (os.getpid(), threading.get_native_id(),time.time())
+        self.pending_request[request_id] = time.time()
         self.locker.release()
         return request_id
 
@@ -104,7 +103,7 @@ class IPC_zmq:
         return d if d is None else pickle.loads(d)
 
 
-    def __clean__private__(self):
+    def __clean__unsafe__(self):
         c_t = time.time()
         if math.floor((c_t - self.__last_t) / 600) > 0:
             self.__last_t = c_t
@@ -143,7 +142,7 @@ class IPC_zmq:
                 break
 
         self.locker.acquire()
-        self.__clean__private__()
+        self.__clean__unsafe__()
         self.locker.release()
         return response
 
@@ -172,4 +171,3 @@ class IPC_zmq:
             except Exception as e:
                 pass
             p.terminate()
-

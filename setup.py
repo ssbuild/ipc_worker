@@ -7,8 +7,6 @@ import shutil
 
 from setuptools import Extension,find_packages
 
-
-
 def get_desc():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     def load_file(demo_file):
@@ -38,7 +36,7 @@ if __name__ == '__main__':
     setuptools.setup(
         platforms=platforms_name,
         name="ipc-worker",
-        version="0.1.2",
+        version="0.1.3",
         author="ssbuild",
         author_email="9727464@qq.com",
         description=title,
