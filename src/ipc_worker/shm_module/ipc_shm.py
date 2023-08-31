@@ -151,26 +151,36 @@ class IPC_shm:
                         self.pending_response.pop(request_id)
 
                 if not is_end:
-                    r_id, w_id, seq_id, response = self.__output_queue.get()
-                    if r_id != request_id or (request_seq_id is not None and request_seq_id != seq_id):
-                        if r_id in self.pending_response:
-                            rep: Optional[deque] = self.pending_response[r_id]["data"]
-                            for i, node in enumerate(rep):
-                                if seq_id > node[0]:
-                                    rep.insert(i + 1, (seq_id, response))
-                                    break
+                    is_empty = False
+                    try:
+                        item = self.__output_queue.get(block=False, timeout=timeout)
+                    except:
+                        item = None
+                        is_empty = True
+                    if not is_empty:
+                        r_id, w_id, seq_id, response = item
+                        if r_id != request_id or (request_seq_id is not None and request_seq_id != seq_id):
+                            if r_id in self.pending_response:
+                                rep: Optional[deque] = self.pending_response[r_id]["data"]
+                                for i, node in enumerate(rep):
+                                    if seq_id > node[0]:
+                                        rep.insert(i + 1, (seq_id, response))
+                                        break
+                            else:
+                                self.pending_response[r_id] = {
+                                    "time": time.time(),
+                                    "data": deque([(seq_id, response)]),
+                                    "last_seq": seq_id - 1,
+                                }
                         else:
-                            self.pending_response[r_id] = {
-                                "time": time.time(),
-                                "data": deque([(seq_id, response)]),
-                                "last_seq": seq_id - 1,
-                            }
-                    else:
-                        is_end = True
+                            is_end = True
             else:
                 logger.error('bad request_id {}'.format(request_id))
                 is_end = True
-            self._check_and_clean()
+
+            if is_end:
+                self._check_and_clean()
+
             if self.locker.locked():
                 self.locker.release()
             if is_end:

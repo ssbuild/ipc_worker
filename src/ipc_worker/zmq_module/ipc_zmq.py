@@ -176,11 +176,12 @@ class IPC_zmq:
                 logger.error('bad request_id {}'.format(request_id))
                 is_end = True
 
-            if self.locker.locked():
-                self.locker.release()
-                
             if is_end:
                 self._check_and_clean()
+
+            if self.locker.locked():
+                self.locker.release()
+            if is_end:
                 break
         return response
 
