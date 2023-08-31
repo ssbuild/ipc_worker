@@ -3,6 +3,9 @@ import math
 import multiprocessing
 import time
 import threading
+from collections import deque
+from typing import Optional
+
 from .ipc_shm_utils import SHM_manager,SHM_woker
 import pickle
 from ..utils import logger
@@ -103,7 +106,8 @@ class IPC_shm:
         self.locker.release()
         return request_id
 
-    def __clean__private__(self):
+
+    def _check_and_clean(self):
         c_t = time.time()
         if math.floor((c_t - self.__last_t) / 600) > 0:
             self.__last_t = c_t
@@ -111,29 +115,62 @@ class IPC_shm:
             logger.debug('remove {}'.format(str(list(invalid))))
             for rid in invalid:
                 self.pending_request.pop(rid)
+            invalid = set({rid for rid, t in self.pending_response.items() if math.floor((c_t - t["time"]) / 3600) > 0})
+            for rid in invalid:
+                self.pending_response.pop(rid)
 
-    def get(self,request_id):
+    def _get_private(self, request_id, request_seq_id=None):
         response = None
-        while True:
-            is_end = False
-            self.locker.acquire(blocking=False)
-            if self.locker.locked():
-                self.__clean__private__()
-
+        is_end = False
+        timeout = 0.005
+        while not is_end:
+            self.locker.acquire(timeout=timeout)
+            if not self.locker.locked():
+                continue
             if request_id in self.pending_request:
-                self.pending_request[request_id] = time.time()
-                if request_id in self.pending_response:
-                    response = self.pending_response.pop(request_id)
-                    is_end = True
-                else:
-                    r_id,_,seq_id, response = self.__output_queue.get()
-                    if r_id != request_id:
-                        self.pending_response[r_id] = response
+                up_time = time.time()
+                self.pending_request[request_id] = up_time
+                reps = self.pending_response.get(request_id, None)
+                if reps is not None:
+                    reps["time"] = up_time
+                    rep: Optional[deque] = reps["data"]
+                    item_size = len(rep)
+                    if item_size > 0:
+                        if request_seq_id is None:
+                            (seq_id, response) = rep.popleft()
+                            is_end = True
+                        else:
+                            for i, rep_sub in enumerate(rep):
+                                if rep_sub[0] == request_seq_id:
+                                    (seq_id, response) = rep_sub
+                                    rep.remove(rep_sub)
+                                    is_end = True
+                                    break
+
+                    if len(rep) == 0:
+                        self.pending_response.pop(request_id)
+
+                if not is_end:
+                    r_id, w_id, seq_id, response = self.__output_queue.get()
+                    if r_id != request_id or (request_seq_id is not None and request_seq_id != seq_id):
+                        if r_id in self.pending_response:
+                            rep: Optional[deque] = self.pending_response[r_id]["data"]
+                            for i, node in enumerate(rep):
+                                if seq_id > node[0]:
+                                    rep.insert(i + 1, (seq_id, response))
+                                    break
+                        else:
+                            self.pending_response[r_id] = {
+                                "time": time.time(),
+                                "data": deque([(seq_id, response)]),
+                                "last_seq": seq_id - 1,
+                            }
                     else:
                         is_end = True
             else:
-                print('bad request_id {}'.format(request_id))
+                logger.error('bad request_id {}'.format(request_id))
                 is_end = True
+            self._check_and_clean()
             if self.locker.locked():
                 self.locker.release()
             if is_end:

@@ -7,10 +7,12 @@ import os
 import random
 import threading
 import time
+from typing import Optional
+
 from .ipc_zmq_utils import ZMQ_manager,ZMQ_sink,ZMQ_worker
 import pickle
 from ..utils import logger
-
+from collections import deque
 
 
 class ZMQ_process_worker(ZMQ_worker):
@@ -98,12 +100,12 @@ class IPC_zmq:
         self.locker.release()
         return request_id
 
-    def get(self,request_id):
-        d = self.__get_private__(request_id)
+    # request_seq_id initail 1
+    def get(self,request_id,request_seq_id=None):
+        d = self._get_private(request_id,request_seq_id)
         return d if d is None else pickle.loads(d)
 
-
-    def __clean__unsafe__(self):
+    def _check_and_clean(self):
         c_t = time.time()
         if math.floor((c_t - self.__last_t) / 600) > 0:
             self.__last_t = c_t
@@ -111,43 +113,67 @@ class IPC_zmq:
             logger.debug('remove {}'.format(str(list(invalid))))
             for rid in invalid:
                 self.pending_request.pop(rid)
-
-    def __get_private__(self, request_id):
+            invalid = set({rid for rid, t in self.pending_response.items() if math.floor((c_t - t["time"]) / 3600) > 0})
+            for rid in invalid:
+                self.pending_response.pop(rid)
+    def _get_private(self, request_id,request_seq_id=None):
         sink = self.__manager_lst[1]
         response = None
         is_end = False
         timeout = 0.005
         while not is_end:
-            sink.get_signal().wait(timeout)
             self.locker.acquire(timeout=timeout)
             if not self.locker.locked():
                 continue
             if request_id in self.pending_request:
-                self.pending_request[request_id] = time.time()
-                if request_id in self.pending_response:
-                    response = self.pending_response.pop(request_id)
-                    is_end = True
-                else:
+                up_time = time.time()
+                self.pending_request[request_id] = up_time
+                reps = self.pending_response.get(request_id,None)
+                if reps is not None:
+                    reps["time"] = up_time
+                    rep: Optional[deque] = reps["data"]
+                    item_size = len(rep)
+                    if item_size > 0:
+                        if request_seq_id is None:
+                            (seq_id,response) = rep.popleft()
+                            is_end = True
+                        else:
+                            for i,rep_sub in enumerate(rep):
+                                if rep_sub[0] == request_seq_id:
+                                    (seq_id,response) = rep_sub
+                                    rep.remove(rep_sub)
+                                    is_end = True
+                                    break
+
+                    if len(rep) == 0:
+                        self.pending_response.pop(request_id)
+
+                if not is_end:
                     r_id, w_id, seq_id, response = sink.get_queue().get()
-                    if r_id != request_id:
-                        self.pending_response[r_id] = response
+                    if r_id != request_id or (request_seq_id is not None and request_seq_id != seq_id):
+                        if r_id in self.pending_response:
+                            rep: Optional[deque] = self.pending_response[r_id]["data"]
+                            for i,node in enumerate(rep):
+                                if seq_id > node[0]:
+                                    rep.insert(i+1,(seq_id,response))
+                                    break
+                        else:
+                            self.pending_response[r_id] = {
+                                "time": time.time(),
+                                "data": deque([(seq_id,response)]),
+                                "last_seq": seq_id - 1,
+                            }
                     else:
                         is_end = True
             else:
                 logger.error('bad request_id {}'.format(request_id))
                 is_end = True
+            self._check_and_clean()
             if self.locker.locked():
                 self.locker.release()
             if is_end:
                 break
-
-        self.locker.acquire()
-        self.__clean__unsafe__()
-        self.locker.release()
         return response
-
-
-
 
     def join(self):
         for p in self.__manager_lst:

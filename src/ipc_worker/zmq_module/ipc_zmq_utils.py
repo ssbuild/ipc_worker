@@ -113,9 +113,6 @@ class ZMQ_sink(Process):
         self.evt_quit = evt_quit
 
         self.queue = Queue(maxsize=queue_size)
-        #
-
-        self.signal = Event()
         self.addr = None
 
 
@@ -124,9 +121,6 @@ class ZMQ_sink(Process):
 
     def get_queue(self) -> Queue:
         return self.queue
-
-    def get_signal(self) -> Event:
-        return self.signal
 
     def __processinit__(self):
         self.context = zmq.Context()
@@ -161,7 +155,6 @@ class ZMQ_sink(Process):
                 w_id = int.from_bytes(w_id, byteorder='little', signed=False)
                 seq_id = int.from_bytes(seq_id, byteorder='little', signed=False)
                 self.queue.put((r_id,w_id,seq_id,response))
-                self.signal.set()
         except Exception as e:
             print(e)
         self.release()
