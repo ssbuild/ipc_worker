@@ -122,67 +122,62 @@ class IPC_zmq:
         is_end = False
         timeout = 0.005
         while not is_end:
-            self.locker.acquire(timeout=0.005)
-            if not self.locker.locked():
-                continue
-            if request_id in self.pending_request:
-                up_time = time.time()
-                self.pending_request[request_id] = up_time
-                reps = self.pending_response.get(request_id,None)
-                if reps is not None:
-                    reps["time"] = up_time
-                    rep: Optional[deque] = reps["data"]
-                    item_size = len(rep)
-                    if item_size > 0:
-                        if request_seq_id is None:
-                            (seq_id,response) = rep.popleft()
-                            is_end = True
-                        else:
-                            for i,rep_sub in enumerate(rep):
-                                if rep_sub[0] == request_seq_id:
-                                    (seq_id,response) = rep_sub
-                                    rep.remove(rep_sub)
-                                    is_end = True
-                                    break
-
-                    if len(rep) == 0:
-                        self.pending_response.pop(request_id)
-
-                if not is_end:
-                    is_empty = False
-                    try:
-                        item = sink.get_queue().get(block=False,timeout=timeout)
-                    except:
-                        item = None
-                        is_empty = True
-                    if not is_empty:
-                        r_id, w_id, seq_id, response = item
-                        if r_id != request_id or (request_seq_id is not None and request_seq_id != seq_id):
-                            if r_id in self.pending_response:
-                                rep: Optional[deque] = self.pending_response[r_id]["data"]
-                                for i,node in enumerate(rep):
-                                    if seq_id > node[0]:
-                                        rep.insert(i+1,(seq_id,response))
-                                        break
+            with self.locker:
+                if request_id in self.pending_request:
+                    up_time = time.time()
+                    self.pending_request[request_id] = up_time
+                    reps = self.pending_response.get(request_id,None)
+                    if reps is not None:
+                        reps["time"] = up_time
+                        rep: Optional[deque] = reps["data"]
+                        item_size = len(rep)
+                        if item_size > 0:
+                            if request_seq_id is None:
+                                (seq_id,response) = rep.popleft()
+                                is_end = True
                             else:
-                                self.pending_response[r_id] = {
-                                    "time": time.time(),
-                                    "data": deque([(seq_id,response)]),
-                                    "last_seq": seq_id - 1,
-                                }
-                        else:
-                            is_end = True
-            else:
-                logger.error('bad request_id {}'.format(request_id))
-                is_end = True
+                                for i,rep_sub in enumerate(rep):
+                                    if rep_sub[0] == request_seq_id:
+                                        (seq_id,response) = rep_sub
+                                        rep.remove(rep_sub)
+                                        is_end = True
+                                        break
 
-            if is_end:
-                self._check_and_clean()
+                        if len(rep) == 0:
+                            self.pending_response.pop(request_id)
 
-            if self.locker.locked():
-                self.locker.release()
-            if is_end:
-                break
+                    if not is_end:
+                        is_empty = False
+                        try:
+                            item = sink.get_queue().get(block=False,timeout=timeout)
+                        except:
+                            item = None
+                            is_empty = True
+                        if not is_empty:
+                            r_id, w_id, seq_id, response = item
+                            if r_id != request_id or (request_seq_id is not None and request_seq_id != seq_id):
+                                if r_id in self.pending_response:
+                                    rep: Optional[deque] = self.pending_response[r_id]["data"]
+                                    for i,node in enumerate(rep):
+                                        if seq_id > node[0]:
+                                            rep.insert(i+1,(seq_id,response))
+                                            break
+                                else:
+                                    self.pending_response[r_id] = {
+                                        "time": time.time(),
+                                        "data": deque([(seq_id,response)]),
+                                        "last_seq": seq_id - 1,
+                                    }
+                            else:
+                                is_end = True
+                else:
+                    logger.error('bad request_id {}'.format(request_id))
+                    is_end = True
+
+                if is_end:
+                    self._check_and_clean()
+                if is_end:
+                    break
         return response
 
     def join(self):
