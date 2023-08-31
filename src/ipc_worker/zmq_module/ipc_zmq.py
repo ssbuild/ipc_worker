@@ -153,6 +153,7 @@ class IPC_zmq:
                     try:
                         item = sink.get_queue().get(block=False,timeout=timeout)
                     except:
+                        item = None
                         is_empty = True
                     if not is_empty:
                         r_id, w_id, seq_id, response = item
@@ -174,10 +175,12 @@ class IPC_zmq:
             else:
                 logger.error('bad request_id {}'.format(request_id))
                 is_end = True
-            self._check_and_clean()
+
             if self.locker.locked():
                 self.locker.release()
+                
             if is_end:
+                self._check_and_clean()
                 break
         return response
 
