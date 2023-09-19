@@ -36,7 +36,7 @@ if __name__ == '__main__':
     setuptools.setup(
         platforms=platforms_name,
         name="ipc-worker",
-        version="0.1.5",
+        version="0.1.6",
         author="ssbuild",
         author_email="9727464@qq.com",
         description=title,

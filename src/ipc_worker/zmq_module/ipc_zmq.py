@@ -79,6 +79,7 @@ class IPC_zmq:
 
         for w in self.__manager_lst:
             w.wait_init()
+            w.set_signal()
 
 
         for w in self.__woker_lst:

@@ -4,6 +4,7 @@
 import json
 import threading
 import time
+import traceback
 import typing
 import zmq
 from multiprocessing import Queue
@@ -95,8 +96,11 @@ class ZMQ_worker(Process):
                     deata = datetime.now() - start_t
                     micros = deata.seconds * 1000 + deata.microseconds / 1000
                     logger.debug('worker msg_size {} , runtime {}'.format(msg_size, micros))
+        except KeyboardInterrupt:
+            ...
         except Exception as e:
-            print(e)
+            traceback.print_exc()
+            logger.info(e)
 
         self.run_end()
         self.release()
@@ -155,8 +159,11 @@ class ZMQ_sink(Process):
                 w_id = int.from_bytes(w_id, byteorder='little', signed=False)
                 seq_id = int.from_bytes(seq_id, byteorder='little', signed=False)
                 self.queue.put((r_id,w_id,seq_id,response))
+        except KeyboardInterrupt:
+            ...
         except Exception as e:
-            print(e)
+            traceback.print_exc()
+            logger.info(e)
         self.release()
 
 
@@ -176,6 +183,10 @@ class ZMQ_manager(Process):
         self.locker = threading.Lock()
         self.addr = None
         self.__is_closed = False
+        self.signal = Event()
+
+    def set_signal(self):
+        self.signal.set()
 
     def wait_init(self):
         self.addr = self.queue.get()
@@ -196,8 +207,15 @@ class ZMQ_manager(Process):
         self.addr = auto_bind(self.sender)
         self.queue.put(self.addr)
 
+    def _remove_signal(self):
+        if self.signal is not None:
+            self.signal.set()
+            del self.signal
+            self.signal = None
+
     def release(self):
         try:
+            self._remove_signal()
             if not self.__is_closed:
                 self.__is_closed = True
                 self.queue.close()
@@ -211,11 +229,15 @@ class ZMQ_manager(Process):
         self.__processinit__()
         logger.debug('group {} manager bind {}'.format(self.group_name,self.addr))
         try:
+            self.signal.wait()
             while not self.evt_quit.is_set():
                 request_id,identity,msg = self.queue.get()
                 if self.__is_closed:
                     break
                 self.sender.send_multipart([identity,msg, request_id.to_bytes(4,byteorder='little',signed=False)])
+        except KeyboardInterrupt:
+            ...
         except Exception as e:
-            print(e)
+            traceback.print_exc()
+            logger.info(e)
         self.release()

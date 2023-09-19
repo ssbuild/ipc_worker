@@ -124,8 +124,11 @@ class SHM_manager(Process):
                     deata = datetime.now() - start_t
                     micros = deata.seconds * 1000 + deata.microseconds / 1000
                     logger.info('manager workerId {} , runtime {}'.format(sel_id, micros))
+        except KeyboardInterrupt:
+            ...
         except Exception as e:
-            print(e)
+            traceback.print_exc()
+            logger.info(e)
         self.release()
 
 class SHM_woker(Process):
@@ -217,6 +220,8 @@ class SHM_woker(Process):
                     deata = datetime.now() - start_t
                     micros = deata.seconds * 1000 + deata.microseconds / 1000
                     logger.info('worker msg_size {} , runtime {}'.format(msg_size,micros))
+        except KeyboardInterrupt:
+            ...
         except Exception as e:
             traceback.print_exc()
             logger.error(e)
