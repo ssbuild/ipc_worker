@@ -1,18 +1,15 @@
 # @Time    : 2021/11/26 21:15
 # @Author  : tk
 # @FileName: zmq_utils.py
-import json
 import threading
-import time
 import traceback
 import typing
 import zmq
-from multiprocessing import Queue
-from multiprocessing import Event,Process
+from multiprocessing import Queue,Event,Process
 import pickle
 from datetime import datetime
 from .ipc_utils_func import auto_bind
-from ..utils import logger
+from ..utils import logger,Lock as MyLock
 
 
 class ZMQ_worker(Process):
@@ -109,8 +106,8 @@ class ZMQ_worker(Process):
 
 
 class ZMQ_sink(Process):
-    def __init__(self,queue_size,group_name,evt_quit,daemon=False):
-        super(ZMQ_sink,self).__init__(daemon=daemon)
+    def __init__(self,queue_size,group_name,evt_quit,**kwargs):
+        super(ZMQ_sink,self).__init__(**kwargs)
 
         self.group_name = group_name
         self.__is_closed = False
@@ -172,15 +169,15 @@ class ZMQ_sink(Process):
 
 
 class ZMQ_manager(Process):
-    def __init__(self,idx,queue_size,group_name,evt_quit,daemon=False):
-        super(ZMQ_manager, self).__init__(daemon=daemon)
+    def __init__(self,idx,queue_size,group_name,evt_quit,**kwargs):
+        super(ZMQ_manager, self).__init__(**kwargs)
         self.group_name = group_name
         self.request_id = 0
         self.idx = idx
 
         self.queue = Queue(queue_size)
         self.evt_quit = evt_quit
-        self.locker = threading.Lock()
+        self.locker = MyLock()
         self.addr = None
         self.__is_closed = False
         self.signal = Event()

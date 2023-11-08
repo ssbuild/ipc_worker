@@ -8,7 +8,6 @@ import multiprocessing
 import traceback
 from multiprocessing import Event,Condition,Process
 from datetime import datetime
-import numpy as np
 import pickle
 import typing
 from .ipc_utils_func import C_sharedata, WorkState
@@ -53,8 +52,10 @@ class SHM_manager(Process):
 
     def release(self):
         if not getattr(self,'__is_closed',False):
-            self._input_queue.close()
-            self._output_queue.close()
+            del self._input_queue
+            del self._output_queue
+            # self._input_queue.close()
+            # self._output_queue.close()
             setattr(self,'__is_closed',True)
 
     def run(self):

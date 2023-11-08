@@ -3,8 +3,7 @@
 # @Author  : tk
 
 import logging
-import time
-from multiprocessing import Queue
+import threading
 
 from termcolor import colored
 
@@ -27,3 +26,55 @@ def set_logger(context, verbose=False):
 
 
 logger = set_logger(colored('VENTILATOR', 'magenta'))
+
+
+
+class RLock:
+    def __init__(self):
+        self._lock = threading.RLock()
+
+    def __enter__(self):
+        return self._lock.__enter__()
+    def __exit__(self, t, v, tb):
+        return self._lock.__exit__(t,v,tb)
+    def __repr__(self):
+        return self._lock.__repr__()
+
+
+    def acquire(self):
+        self._lock.acquire()
+
+    def release(self):
+        self._lock.release()
+
+    def __getstate__(self):
+        return {}
+
+    def __setstate__(self, state):
+        self.__init__()
+
+
+class Lock:
+    def __init__(self):
+        self._lock = threading.Lock()
+
+    def __enter__(self):
+        return self._lock.__enter__()
+
+    def __exit__(self, t, v, tb):
+        return self._lock.__exit__(t, v, tb)
+
+    def __repr__(self):
+        return self._lock.__repr__()
+
+    def acquire(self):
+        self._lock.acquire()
+
+    def release(self):
+        self._lock.release()
+
+    def __getstate__(self):
+        return {}
+
+    def __setstate__(self, state):
+        self.__init__()

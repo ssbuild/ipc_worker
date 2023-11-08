@@ -18,12 +18,12 @@ def get_desc():
     long_description_str = '```py' + '\n' + data_string + '\n' + '```' + '\n'
 
 
-    data_string = load_file(os.path.join(current_dir,'tests/test_shm_ipc.py'))
+    data_string = load_file(os.path.join(current_dir,'tests/test_ipc_shm.py'))
 
 
     long_description_str += '```py' + '\n' + data_string + '\n'+ '```' + '\n'
 
-    data_string = load_file(os.path.join(current_dir, 'tests/test_zmq_ipc.py'))
+    data_string = load_file(os.path.join(current_dir, 'tests/test_ipc_zmq.py'))
     long_description_str += '```py' + '\n' + data_string + '\n' + '```' + '\n'
 
     return long_description_str
@@ -36,7 +36,7 @@ if __name__ == '__main__':
     setuptools.setup(
         platforms=platforms_name,
         name="ipc-worker",
-        version="0.1.6",
+        version="0.1.7",
         author="ssbuild",
         author_email="9727464@qq.com",
         description=title,

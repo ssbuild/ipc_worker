@@ -5,10 +5,9 @@ import time
 import threading
 from collections import deque
 from typing import Optional
-
 from .ipc_shm_utils import SHM_manager,SHM_woker
 import pickle
-from ..utils import logger
+from ..utils import logger,Lock as MyLock
 
 
 class SHM_process_worker(SHM_woker):
@@ -55,7 +54,7 @@ class IPC_shm:
         self.pending_request = {}
         self.pending_response = {}
 
-        self.locker = threading.Lock()
+        self.locker = MyLock()
 
         assert isinstance(worker_args, tuple)
         self.__input_queue = multiprocessing.Manager().Queue(queue_size)
@@ -119,6 +118,11 @@ class IPC_shm:
             for rid in invalid:
                 self.pending_response.pop(rid)
 
+    # request_seq_id initail 1
+    def get(self, request_id, request_seq_id=None):
+        d = self._get_private(request_id, request_seq_id)
+        return d
+        # return d if d is None else pickle.loads(d)
     def _get_private(self, request_id, request_seq_id=None):
         response = None
         is_end = False
@@ -182,11 +186,11 @@ class IPC_shm:
                     break
         return response
 
-    def join(self):
+    def join(self,timeout=None):
         for p in self.__manager_lst:
-            p.join()
+            p.join(timeout)
         for p in self.__woker_lst:
-            p.join()
+            p.join(timeout)
 
     def terminate(self):
         for p in self.__woker_lst + self.__manager_lst:

@@ -15,6 +15,8 @@ Do not recommended run in windows , it will report an error as follow
 '''
 import multiprocessing
 import os
+import signal
+
 from ipc_worker import logger
 from ipc_worker.ipc_shm_loader import IPC_shm,SHM_process_worker
 
@@ -69,7 +71,7 @@ if __name__ == '__main__':
         group_name='serving_shm',  # share memory name
         shm_size=1 * 1024 * 1024,  # share memory size
         queue_size=20,  # recv queue size
-        is_log_time=True,  # whether log compute time
+        is_log_time=False,  # whether log compute time
         daemon=False,
     )
 
@@ -82,6 +84,14 @@ if __name__ == '__main__':
         request_id = instance.put(data)
         data = instance.get(request_id)
         print('get process result',data)
+
+
+    def signal_handler(signum, frame):
+        evt_quit.set()
+        instance.terminate()
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGINT, signal_handler)
+
     try:
         instance.join()
     except Exception as e:

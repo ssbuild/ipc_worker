@@ -8,10 +8,9 @@ import random
 import threading
 import time
 from typing import Optional
-
 from .ipc_zmq_utils import ZMQ_manager,ZMQ_sink,ZMQ_worker
 import pickle
-from ..utils import logger
+from ..utils import logger,Lock as MyLock
 from collections import deque
 
 
@@ -71,7 +70,7 @@ class IPC_zmq:
         self.__last_worker_id = len(self.__group_idenity) - 1
         self.pending_request = {}
         self.pending_response = {}
-        self.locker = threading.Lock()
+        self.locker = MyLock()
         self.__last_t = time.time()
     def start(self):
         for w in self.__manager_lst:
@@ -182,12 +181,12 @@ class IPC_zmq:
                     break
         return response
 
-    def join(self):
+    def join(self,timeout=None):
         for p in self.__manager_lst:
-            p.join()
+            p.join(timeout)
         time.sleep(1)
         for p in self.__woker_lst:
-            p.join()
+            p.join(timeout)
 
     @property
     def manager_process_list(self):

@@ -3,31 +3,23 @@
 # @Author  : tk
 import multiprocessing
 import os
-from ipc_worker import logger
-from ipc_worker.ipc_zmq_loader import IPC_zmq,ZMQ_process_worker
-
+import signal
 import torch
-'''
-    demo ZMQ depend zmq
-    pip install pyzmq
-    test pass >= python3.6
-'''
+from ipc_worker import logger
+from ipc_worker.ipc_zmq_loader import IPC_zmq, ZMQ_process_worker
 
-tmp_dir = './tmp'
-if not os.path.exists(tmp_dir):
-    os.mkdir(tmp_dir)
 
-os.environ['ZEROMQ_SOCK_TMP_DIR'] = tmp_dir
+
 
 class My_worker(ZMQ_process_worker):
-    def __init__(self,config,*args,**kwargs):
-        super(My_worker,self).__init__(*args,**kwargs)
-        #config info , use by yourself
-        logger.info('Process id {}, group name {} , identity {}'.format(self._idx,self._group_name,self._identity))
+    def __init__(self, config, *args, **kwargs):
+        super(My_worker, self).__init__(*args, **kwargs)
+        # config info , use by yourself
+        logger.info('Process id {}, group name {} , identity {}'.format(self._idx, self._group_name, self._identity))
         logger.info(config)
         self.config = config
 
-    #Process begin trigger this func
+    # Process begin trigger this func
     def run_begin(self):
         logger.info('worker pid {}...'.format(os.getpid()))
         self.handle = None
@@ -38,22 +30,34 @@ class My_worker(ZMQ_process_worker):
         if self.handle is not None:
             pass
 
-    #any data put will trigger this func
-    def run_once(self,request_data):
-        #process request_data
-        print(torch.cuda.device_count(),torch.cuda.current_device())
+    # any data put will trigger this func
+    def run_once(self, request_data):
+        # process request_data
+        print(torch.cuda.device_count(), torch.cuda.current_device())
 
-
-        if isinstance(request_data,dict):
+        if isinstance(request_data, dict):
             request_data['b'] = 200
         if self.handle is not None:
-            #do some thing
+            # do some thing
             pass
         return request_data
 
-
 if __name__ == '__main__':
-    torch.multiprocessing.set_start_method('spawn',force=True)
+
+
+    # torch.multiprocessing.set_start_method('spawn', force=True)
+    '''
+        demo ZMQ depend zmq
+        pip install pyzmq
+        test pass >= python3.6
+    '''
+
+    tmp_dir = './tmp'
+    if not os.path.exists(tmp_dir):
+        os.mkdir(tmp_dir)
+
+    os.environ['ZEROMQ_SOCK_TMP_DIR'] = tmp_dir
+
 
     config = {
         "anything" : "anything",
@@ -84,6 +88,14 @@ if __name__ == '__main__':
 
         data = instance.get(request_id)
         print('get process result',request_id,data)
+
+
+    def signal_handler(signum, frame):
+        evt_quit.set()
+        instance.terminate()
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGINT, signal_handler)
+
     try:
         instance.join()
     except Exception as e:
